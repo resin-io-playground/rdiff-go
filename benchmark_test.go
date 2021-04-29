@@ -29,42 +29,42 @@ func signature(b *testing.B, src io.Reader) *SignatureType {
 	return s
 }
 
-func BenchmarkSignature(b *testing.B) {
-	var totalBytes int64 = 1000000000 // 1 GB
-	src := io.LimitReader(rand.New(rand.NewSource(time.Now().UnixNano())), totalBytes)
-
+func benchmarkSignature(b *testing.B, totalBytes int64) {
 	b.SetBytes(totalBytes)
-	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
+		src := io.LimitReader(rand.New(rand.NewSource(time.Now().UnixNano())), totalBytes)
 		signature(b, src)
 	}
 }
 
-func BenchmarkDelta(b *testing.B) {
-	var totalBytes int64 = 1000000000 // 1 GB
+func BenchmarkSignature1MB(b *testing.B) {
+	benchmarkSignature(b, 1_000_000)
+}
 
-	var srcBuf bytes.Buffer
-	src := io.TeeReader(
-		io.LimitReader(rand.New(rand.NewSource(time.Now().UnixNano())), totalBytes),
-		&srcBuf)
+func BenchmarkSignature1GB(b *testing.B) {
+	benchmarkSignature(b, 1_000_000_000)
+}
+
+func benchmarkDeltaChangedTail(b *testing.B, totalBytes int64) {
+	newBytes := totalBytes / 10
+	oldBytes := totalBytes - newBytes
+	oldSeed := time.Now().UnixNano()
+	oldData := io.LimitReader(rand.New(rand.NewSource(oldSeed)), totalBytes)
+	s := signature(b, oldData)
+
 	b.SetBytes(totalBytes)
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		s := signature(b, src)
+		newSeed := time.Now().UnixNano()
+		newData := io.MultiReader(
+			io.LimitReader(rand.New(rand.NewSource(oldSeed)), oldBytes),
+			io.LimitReader(rand.New(rand.NewSource(newSeed)), newBytes),
+		)
 
 		var buf bytes.Buffer
-
-		// create 10% of difference by appending new random data
-		newBytes := totalBytes / 10
-		srcBuf.Truncate(int(totalBytes - newBytes))
-		_, err := io.CopyN(&srcBuf, rand.New(rand.NewSource(time.Now().UnixNano())), newBytes)
-		if err != nil {
-			b.Error(err)
-		}
-
-		if err := Delta(s, &srcBuf, &buf); err != nil {
+		if err := Delta(s, newData, &buf); err != nil {
 			b.Error(err)
 		}
 
@@ -73,34 +73,10 @@ func BenchmarkDelta(b *testing.B) {
 	}
 }
 
-func BenchmarkDeltaWithCache(b *testing.B) {
-	var totalBytes int64 = 1000000000 // 1 GB
+func BenchmarkDeltaChangedTail1GB(b *testing.B) {
+	benchmarkDeltaChangedTail(b, 1_000_000_000)
+}
 
-	var srcBuf bytes.Buffer
-	src := io.TeeReader(
-		io.LimitReader(rand.New(rand.NewSource(time.Now().UnixNano())), totalBytes),
-		&srcBuf)
-	s := signature(b, src)
-
-	b.SetBytes(totalBytes)
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var buf bytes.Buffer
-
-		// create 10% of difference by appending new random data
-		newBytes := totalBytes / 10
-		srcBuf.Truncate(int(totalBytes - newBytes))
-		_, err := io.CopyN(&srcBuf, rand.New(rand.NewSource(time.Now().UnixNano())), newBytes)
-		if err != nil {
-			b.Error(err)
-		}
-
-		if err := Delta(s, &srcBuf, &buf); err != nil {
-			b.Error(err)
-		}
-
-		b.Logf("raw   size:    %v bytes", totalBytes)
-		b.Logf("delta size:    %v bytes (%.2f%%)", len(buf.Bytes()), (float64(len(buf.Bytes()))/float64(totalBytes))*100)
-	}
+func BenchmarkDeltaChangedTail1MB(b *testing.B) {
+	benchmarkDeltaChangedTail(b, 1_000_000)
 }
