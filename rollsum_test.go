@@ -88,8 +88,8 @@ func TestRollsumConsistency(t *testing.T) {
 	a.Equal(rk1.Digest(), rk2.Digest())
 }
 
-// This triggers a bug in Rotate, caused by the use of arithmetic with bytes,
-// which should be using proper integers.
+// This used to trigger a bug in Rotate(), caused by the use of subtraction with
+// bytes, which should be using proper signed integers instead.
 func TestRollsumRotateByteSubtractionBug(t *testing.T) {
 	a := assert.New(t)
 
