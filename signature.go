@@ -73,8 +73,8 @@ func Signature(input io.Reader, output io.Writer, blockLen, strongLen uint32, si
 	ret.blockLen = blockLen
 
 	for {
-		n, err := io.ReadFull(input, block)
-		if err == io.ErrUnexpectedEOF || err == io.EOF {
+		n, err := input.Read(block)
+		if err == io.EOF {
 			break
 		} else if err != nil {
 			return nil, err
@@ -88,7 +88,10 @@ func Signature(input io.Reader, output io.Writer, blockLen, strongLen uint32, si
 		}
 
 		strong, _ := CalcStrongSum(data, sigType, strongLen)
-		output.Write(strong)
+		_, err = output.Write(strong)
+		if err != nil {
+			return nil, err
+		}
 
 		ret.weak2block[weak] = len(ret.strongSigs)
 		ret.strongSigs = append(ret.strongSigs, strong)
