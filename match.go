@@ -93,24 +93,30 @@ func (m *match) flush() error {
 		}
 	case MATCH_KIND_LITERAL:
 		cmd = OP_LITERAL_N1
-		switch lenSize {
-		case 1:
-			cmd = OP_LITERAL_N1
-		case 2:
-			cmd = OP_LITERAL_N2
-		case 4:
-			cmd = OP_LITERAL_N4
-		case 8:
-			cmd = OP_LITERAL_N8
-		}
 
+		if m.len <= 64 {
+			cmd = Op(uint64(OP_LITERAL_1) + m.len - 1)
+		} else {
+			switch lenSize {
+			case 1:
+				cmd = OP_LITERAL_N1
+			case 2:
+				cmd = OP_LITERAL_N2
+			case 4:
+				cmd = OP_LITERAL_N4
+			case 8:
+				cmd = OP_LITERAL_N8
+			}
+		}
 		err := binary.Write(m.output, binary.BigEndian, cmd)
 		if err != nil {
 			return err
 		}
-		err = m.write(m.len, lenSize)
-		if err != nil {
-			return err
+		if m.len > 64 {
+			err = m.write(m.len, lenSize)
+			if err != nil {
+				return err
+			}
 		}
 		m.output.Write(m.lit)
 		m.lit = []byte{}

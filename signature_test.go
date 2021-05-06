@@ -69,7 +69,7 @@ func TestSignature(t *testing.T) {
 			r.NoError(err)
 			expectedData, err := ioutil.ReadFile(tt.wantOutput)
 			r.NoError(err)
-			r.Equal(expectedData, outputData)
+			a.Equal(expectedData, outputData)
 		})
 	}
 }

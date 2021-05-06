@@ -68,8 +68,26 @@ func Delta(sig *SignatureType, i io.Reader, output io.Writer) error {
 		}
 	}
 
-	for _, b := range block.Bytes() {
-		err := m.add(MATCH_KIND_LITERAL, uint64(b), 1)
+	remainingBytes := block.Bytes()
+	for len(remainingBytes) > 0 {
+		// If we can match all the remaining bytes we are done
+		if blockIdx, ok := sig.weak2block[weakSum.Digest()]; ok {
+			strong2, _ := CalcStrongSum(remainingBytes, sig.sigType, sig.strongLen)
+			if bytes.Equal(sig.strongSigs[blockIdx], strong2) {
+				err := m.add(MATCH_KIND_COPY, uint64(blockIdx)*uint64(sig.blockLen), uint64(len(remainingBytes)))
+				if err != nil {
+					return err
+				}
+				break
+			}
+		}
+
+		// Add a single literal byte to the match and keep looping
+		prevByte = remainingBytes[0]
+		remainingBytes = remainingBytes[1:]
+		weakSum.Rollout(prevByte)
+
+		err := m.add(MATCH_KIND_LITERAL, uint64(prevByte), 1)
 		if err != nil {
 			return err
 		}
