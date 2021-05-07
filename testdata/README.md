@@ -16,6 +16,9 @@ Old and new files created as follows:
   arbitrarily changed on the new one.
 * `005.old`/`005.new`: New file was created by removing some data from the
   beginning, middle and end of the old file.
-* `006.old`/`006.new`: Small files crafted to exercise the case in which there
+* `006.old`/`006.new`: Tiny files crafted to exercise the case in which there
   is a match of the final block (with length less than the block length). This
   happens when using a block length of 2.
+* `007.old`/`007.new`: Tiny files crafted to test the case in which the block
+  length is larger than the new file. This happens when using a block length of
+  5 or more.
