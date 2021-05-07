@@ -22,7 +22,6 @@ func Delta(sig *SignatureType, i io.Reader, output io.Writer) error {
 
 	weakSum := NewRollsum()
 	block, _ := circbuf.NewBuffer(int64(sig.blockLen))
-	block.WriteByte(0)
 	pos := 0
 
 	for {
