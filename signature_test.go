@@ -2,7 +2,13 @@ package librsync
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
 	"io/ioutil"
+	"os"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,66 +16,135 @@ import (
 )
 
 func TestSignature(t *testing.T) {
-	tests := []struct {
-		name         string
-		argBlockLen  uint32
-		argStrongLen uint32
-		argSigType   MagicNumber
-		wantOutput   string
-	}{
-		{
-			name:         "Blake2 / 512 / 32",
-			argSigType:   BLAKE2_SIG_MAGIC,
-			argBlockLen:  512,
-			argStrongLen: 32,
-			wantOutput:   "testdata/signature/blake2-512-32.sig",
-		},
-		{
-			name:         "Blake2 / 2048 / 28",
-			argSigType:   BLAKE2_SIG_MAGIC,
-			argBlockLen:  2048,
-			argStrongLen: 28,
-			wantOutput:   "testdata/signature/blake2-2048-28.sig",
-		},
-		{
-			name:         "Blake2 / 1171 / 31",
-			argSigType:   BLAKE2_SIG_MAGIC,
-			argBlockLen:  1171,
-			argStrongLen: 31,
-			wantOutput:   "testdata/signature/blake2-1171-31.sig",
-		},
-		{
-			name:         "MD4 / 1111 / 15",
-			argSigType:   MD4_SIG_MAGIC,
-			argBlockLen:  1111,
-			argStrongLen: 15,
-			wantOutput:   "testdata/signature/md4-1111-15.sig",
-		},
+	tests := []string{
+		"000-blake2-512-32",
+		"001-blake2-512-32",
+		"002-blake2-512-32",
+		"003-blake2-512-32",
+		"004-blake2-1024-28",
+		"004-blake2-2222-31",
+		"004-blake2-512-32",
+		"005-blake2-512-32",
+		"006-blake2-2-32",
 	}
 
 	r := require.New(t)
 	a := assert.New(t)
 
-	inputData, err := ioutil.ReadFile("testdata/signature/signature.input")
-	r.NoError(err)
-
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt, func(t *testing.T) {
+			file, magic, blockLen, strongLen, err := argsFromTestName(tt)
+			r.NoError(err)
+
+			inputData, err := ioutil.ReadFile("testdata/" + file + ".old")
+			r.NoError(err)
 			input := bytes.NewReader(inputData)
 
 			output := &bytes.Buffer{}
-			got, err := Signature(input, output, tt.argBlockLen, tt.argStrongLen, tt.argSigType)
+			gotSig, err := Signature(input, output, blockLen, strongLen, magic)
 			r.NoError(err)
 
-			a.Equal(tt.argBlockLen, got.blockLen)
-			a.Equal(tt.argSigType, got.sigType)
-			a.Equal(tt.argStrongLen, got.strongLen)
+			wantSig, err := readSignatureFile("testdata/" + tt + ".signature")
+			r.NoError(err)
+			a.Equal(wantSig.blockLen, gotSig.blockLen)
+			a.Equal(wantSig.sigType, gotSig.sigType)
+			a.Equal(wantSig.strongLen, gotSig.strongLen)
 
 			outputData, err := ioutil.ReadAll(output)
 			r.NoError(err)
-			expectedData, err := ioutil.ReadFile(tt.wantOutput)
+			expectedData, err := ioutil.ReadFile("testdata/" + tt + ".signature")
 			r.NoError(err)
 			a.Equal(expectedData, outputData)
 		})
 	}
+}
+
+func argsFromTestName(name string) (file string, magic MagicNumber, blockLen, strongLen uint32, err error) {
+	segs := strings.Split(name, "-")
+	if len(segs) != 4 {
+		return "", 0, 0, 0, fmt.Errorf("invalid format for name %q", name)
+	}
+
+	file = segs[0]
+
+	switch segs[1] {
+	case "blake2":
+		magic = BLAKE2_SIG_MAGIC
+	case "md4":
+		magic = MD4_SIG_MAGIC
+	default:
+		return "", 0, 0, 0, fmt.Errorf("invalid magic %q", segs[1])
+	}
+
+	blockLen64, err := strconv.ParseInt(segs[2], 10, 32)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("invalid block length %q", segs[2])
+	}
+	blockLen = uint32(blockLen64)
+
+	strongLen64, err := strconv.ParseInt(segs[3], 10, 32)
+	if err != nil {
+		return "", 0, 0, 0, fmt.Errorf("invalid strong hash length %q", segs[3])
+	}
+	strongLen = uint32(strongLen64)
+
+	return
+}
+
+func readSignatureFile(path string) (*SignatureType, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var magic MagicNumber
+	err = binary.Read(f, binary.BigEndian, &magic)
+	if err != nil {
+		return nil, err
+	}
+
+	var blockLen uint32
+	err = binary.Read(f, binary.BigEndian, &blockLen)
+	if err != nil {
+		return nil, err
+	}
+
+	var strongLen uint32
+	err = binary.Read(f, binary.BigEndian, &strongLen)
+	if err != nil {
+		return nil, err
+	}
+
+	strongSigs := [][]byte{}
+	weak2block := map[uint32]int{}
+
+	for {
+		var weakSum uint32
+		err = binary.Read(f, binary.BigEndian, &weakSum)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		strongSum := make([]byte, strongLen)
+		n, err := f.Read(strongSum)
+		if err != nil {
+			return nil, err
+		}
+		if n != int(strongLen) {
+			return nil, fmt.Errorf("got only %d/%d bytes of the strong hash", n, strongLen)
+		}
+
+		weak2block[weakSum] = len(strongSigs)
+		strongSigs = append(strongSigs, strongSum)
+	}
+
+	return &SignatureType{
+		sigType:    magic,
+		blockLen:   blockLen,
+		strongLen:  strongLen,
+		strongSigs: strongSigs,
+		weak2block: weak2block,
+	}, nil
 }

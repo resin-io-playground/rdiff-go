@@ -1,7 +1,9 @@
-# Data for testing librsync-go deltas
+# librsync-go Test Data
 
-Reference delta files (`*.delta`) were created using the original (C version)
-`rdiff`.
+Reference files (`*.signature`, `*.delta`) were created using the original (C
+version) `rdiff`.
+
+Old and new files created as follows:
 
 * `000.old`/`000.new`: Both files are equal.
 * `001.old`/`001.new`: The new file was created by appending some data to the
