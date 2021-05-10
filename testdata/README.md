@@ -22,3 +22,6 @@ Old and new files created as follows:
 * `007.old`/`007.new`: Tiny files crafted to test the case in which the block
   length is larger than the new file. This happens when using a block length of
   5 or more.
+* `008.old`/`008.new`: Old file has data, new file is empty.
+* `009.old`/`009.new`: Old file is empty, new file has data.
+* `010.old`/`010.new`: Both files are empty.
