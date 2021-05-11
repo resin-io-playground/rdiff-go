@@ -9,7 +9,7 @@ import (
 )
 
 func TestDelta(t *testing.T) {
-	var totalBytes int64 = 10000000 // 1 MB
+	var totalBytes int64 = 1_000_000 // 1 MB
 
 	var srcBuf bytes.Buffer
 	src := io.TeeReader(
