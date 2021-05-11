@@ -1,13 +1,39 @@
 package librsync
 
 import (
+	"bufio"
 	"bytes"
+	"io"
 	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type errorI interface {
+	// testing#T.Error || testing#B.Error
+	Error(args ...interface{})
+}
+
+func signature(t errorI, src io.Reader) *SignatureType {
+	var (
+		magic            = BLAKE2_SIG_MAGIC
+		blockLen  uint32 = 512
+		strongLen uint32 = 32
+		bufSize          = 65536
+	)
+
+	s, err := Signature(
+		bufio.NewReaderSize(src, bufSize),
+		ioutil.Discard,
+		blockLen, strongLen, magic)
+	if err != nil {
+		t.Error(err)
+	}
+
+	return s
+}
 
 func TestSignature(t *testing.T) {
 	r := require.New(t)

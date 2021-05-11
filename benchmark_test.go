@@ -1,33 +1,12 @@
 package librsync
 
 import (
-	"bufio"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"testing"
 	"time"
 )
-
-func signature(b *testing.B, src io.Reader) *SignatureType {
-	var (
-		magic            = BLAKE2_SIG_MAGIC
-		blockLen  uint32 = 512
-		strongLen uint32 = 32
-		bufSize          = 65536
-	)
-
-	s, err := Signature(
-		bufio.NewReaderSize(src, bufSize),
-		ioutil.Discard,
-		blockLen, strongLen, magic)
-	if err != nil {
-		b.Error(err)
-	}
-
-	return s
-}
 
 func benchmarkSignature(b *testing.B, totalBytes int64) {
 	b.SetBytes(totalBytes)
